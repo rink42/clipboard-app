@@ -105,7 +105,7 @@
   </div>
 
   <div class="toolbar">
-    <button class="btn primary" id="copyBtn">複製選取／全部</button>
+    <button class="btn primary" id="copyBtn">傳到剪貼簿</button>
     <button class="btn" id="openBtn">開啟剪貼簿</button>
   </div>
   <div class="hint">提示：先反白要複製的文字再按「複製」；未反白則複製整段。</div>
@@ -255,6 +255,7 @@ document.getElementById('clearAll').addEventListener('click',()=>{
 });
 
 render();
+openSheet();
 
 /* Service Worker */
 if('serviceWorker' in navigator){
