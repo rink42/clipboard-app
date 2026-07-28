@@ -34,17 +34,6 @@
   }
   #editor:focus{border-color:var(--accent);}
 
-  /* 長按輸入框冒出的「剪貼簿」小按鈕 */
-  #clipBubble{
-    position:absolute;z-index:20;transform:translate(-50%,-100%);
-    background:#000;color:#fff;padding:8px 14px;border-radius:10px;font-size:14px;font-weight:600;
-    box-shadow:0 6px 20px rgba(0,0,0,.5);white-space:nowrap;
-    opacity:0;pointer-events:none;transition:opacity .12s;
-  }
-  #clipBubble.show{opacity:1;pointer-events:auto;}
-  #clipBubble::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);
-    border:6px solid transparent;border-top-color:#000;}
-
   .toolbar{display:flex;gap:10px;flex-wrap:wrap;}
   .btn{
     flex:1;min-width:120px;padding:12px;border:none;border-radius:12px;font-size:15px;font-weight:600;
@@ -107,13 +96,12 @@
 <body>
 <header>
   <h1>📋 剪貼簿 App</h1>
-  <p>長按下方輸入框 → 冒出「剪貼簿」→ 由下滑出視窗。<br>選取文字後按「複製」即會存入剪貼簿清單。</p>
+  <p>選取文字後按「複製」即會存入剪貼簿清單，按「開啟剪貼簿」叫出視窗貼上。</p>
 </header>
 
 <main>
   <div class="field">
-    <textarea id="editor" placeholder="在這裡輸入文字…（長按此處叫出剪貼簿）"></textarea>
-    <div id="clipBubble">📋 剪貼簿</div>
+    <textarea id="editor" placeholder="在這裡輸入文字…"></textarea>
   </div>
 
   <div class="toolbar">
@@ -144,7 +132,6 @@
 <script>
 const KEY='clipboard_items_v1';
 const editor=document.getElementById('editor');
-const bubble=document.getElementById('clipBubble');
 const sheet=document.getElementById('sheet');
 const scrim=document.getElementById('scrim');
 const grid=document.getElementById('grid');
@@ -186,35 +173,6 @@ function openSheet(){render();sheet.classList.add('show');scrim.classList.add('s
 function closeSheet(){sheet.classList.remove('show');scrim.classList.remove('show');hideCtx();}
 document.getElementById('openBtn').addEventListener('click',openSheet);
 scrim.addEventListener('click',closeSheet);
-
-/* ---------- 長按輸入框 → 顯示「剪貼簿」氣泡 ---------- */
-let pressTimer=null;
-function showBubbleAt(x,y){
-  const r=editor.getBoundingClientRect();
-  bubble.style.left=Math.min(Math.max(x,r.left+40),r.right-40)+'px';
-  bubble.style.top=(y-8)+'px';
-  bubble.classList.add('show');
-  clearTimeout(showBubbleAt._t);
-  showBubbleAt._t=setTimeout(hideBubble,3000);
-}
-function hideBubble(){bubble.classList.remove('show');}
-bubble.addEventListener('click',()=>{hideBubble();openSheet();});
-
-function startPress(x,y){
-  clearTimeout(pressTimer);
-  pressTimer=setTimeout(()=>showBubbleAt(x,y),480);
-}
-function cancelPress(){clearTimeout(pressTimer);}
-
-editor.addEventListener('touchstart',e=>{const t=e.touches[0];startPress(t.clientX,t.clientY);},{passive:true});
-editor.addEventListener('touchend',cancelPress);
-editor.addEventListener('touchmove',cancelPress,{passive:true});
-// 桌機測試：滑鼠長按
-editor.addEventListener('mousedown',e=>startPress(e.clientX,e.clientY));
-editor.addEventListener('mouseup',cancelPress);
-editor.addEventListener('mouseleave',cancelPress);
-// 攔截原生 contextmenu，改用自訂氣泡（右鍵 / 部分裝置長按）
-editor.addEventListener('contextmenu',e=>{e.preventDefault();showBubbleAt(e.clientX||100,e.clientY||100);});
 
 /* ---------- 渲染卡片 ---------- */
 function render(){
