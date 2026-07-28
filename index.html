@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="manifest.json">
+<title>剪貼簿</title>
+<style>
+  :root{
+    --bg:#0f172a; --surface:#1e293b; --card:#334155; --card2:#3f4d63;
+    --text:#f1f5f9; --sub:#94a3b8; --accent:#38bdf8; --danger:#f87171;
+    --radius:14px; --sheet-h:38vh;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:var(--bg);color:var(--text);
+    font-family:-apple-system,"Noto Sans TC","Segoe UI",Roboto,sans-serif;
+    display:flex;flex-direction:column;overflow:hidden;
+    padding-top:env(safe-area-inset-top);
+  }
+  header{padding:16px 18px 8px;}
+  header h1{margin:0;font-size:20px;font-weight:700;}
+  header p{margin:4px 0 0;font-size:12px;color:var(--sub);line-height:1.5;}
+
+  main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px 18px;overflow:auto;}
+
+  .field{position:relative;}
+  #editor{
+    width:100%;min-height:150px;resize:none;padding:14px;font-size:16px;line-height:1.6;
+    background:var(--surface);color:var(--text);border:1px solid #334155;border-radius:var(--radius);
+    outline:none;
+  }
+  #editor:focus{border-color:var(--accent);}
+
+  /* 長按輸入框冒出的「剪貼簿」小按鈕 */
+  #clipBubble{
+    position:absolute;z-index:20;transform:translate(-50%,-100%);
+    background:#000;color:#fff;padding:8px 14px;border-radius:10px;font-size:14px;font-weight:600;
+    box-shadow:0 6px 20px rgba(0,0,0,.5);white-space:nowrap;
+    opacity:0;pointer-events:none;transition:opacity .12s;
+  }
+  #clipBubble.show{opacity:1;pointer-events:auto;}
+  #clipBubble::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);
+    border:6px solid transparent;border-top-color:#000;}
+
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;}
+  .btn{
+    flex:1;min-width:120px;padding:12px;border:none;border-radius:12px;font-size:15px;font-weight:600;
+    background:var(--surface);color:var(--text);cursor:pointer;
+  }
+  .btn.primary{background:var(--accent);color:#082f49;}
+  .hint{font-size:12px;color:var(--sub);}
+
+  /* 遮罩 */
+  #scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);opacity:0;pointer-events:none;
+    transition:opacity .25s;z-index:40;}
+  #scrim.show{opacity:1;pointer-events:auto;}
+
+  /* 剪貼簿視窗（由下往上滑出） */
+  #sheet{
+    position:fixed;left:0;right:0;bottom:0;z-index:50;height:var(--sheet-h);
+    background:var(--surface);border-radius:20px 20px 0 0;box-shadow:0 -10px 40px rgba(0,0,0,.5);
+    transform:translateY(100%);transition:transform .28s cubic-bezier(.22,1,.36,1);
+    display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom);
+  }
+  #sheet.show{transform:translateY(0);}
+  .sheet-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;}
+  .grab{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:40px;height:4px;
+    background:#475569;border-radius:2px;}
+  .sheet-head h2{margin:0;font-size:16px;font-weight:700;}
+  .clear-all{background:transparent;border:1px solid var(--danger);color:var(--danger);
+    padding:7px 12px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;}
+
+  .grid{flex:1;overflow:auto;padding:6px 14px 16px;
+    display:grid;grid-template-columns:repeat(3,1fr);gap:10px;align-content:start;}
+  .empty{grid-column:1/-1;text-align:center;color:var(--sub);font-size:13px;padding:30px 0;}
+
+  .item{
+    position:relative;background:var(--card);border-radius:12px;padding:10px;min-height:78px;
+    font-size:13px;line-height:1.45;cursor:pointer;overflow:hidden;
+    display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;
+    user-select:none;-webkit-user-select:none;
+    transition:transform .08s;
+  }
+  .item:active{transform:scale(.96);}
+  .item.locked{background:var(--card2);border:1px solid #64748b;}
+  .lock-badge{position:absolute;top:4px;right:5px;font-size:12px;}
+
+  /* 卡片長按選單 */
+  #ctx{position:fixed;z-index:60;background:#0b1220;border:1px solid #334155;border-radius:12px;
+    box-shadow:0 8px 30px rgba(0,0,0,.6);overflow:hidden;opacity:0;pointer-events:none;
+    transform:scale(.9);transition:opacity .12s,transform .12s;}
+  #ctx.show{opacity:1;pointer-events:auto;transform:scale(1);}
+  #ctx button{display:block;width:140px;padding:13px 16px;background:transparent;border:none;
+    color:var(--text);font-size:15px;text-align:left;cursor:pointer;}
+  #ctx button+button{border-top:1px solid #1e293b;}
+  #ctx button.d{color:var(--danger);}
+
+  .toast{position:fixed;left:50%;bottom:calc(var(--sheet-h) + 20px);transform:translateX(-50%);
+    background:#000;color:#fff;padding:9px 16px;border-radius:20px;font-size:13px;z-index:80;
+    opacity:0;pointer-events:none;transition:opacity .2s;}
+  .toast.show{opacity:.95;}
+</style>
+</head>
+<body>
+<header>
+  <h1>📋 剪貼簿 App</h1>
+  <p>長按下方輸入框 → 冒出「剪貼簿」→ 由下滑出視窗。<br>選取文字後按「複製」即會存入剪貼簿清單。</p>
+</header>
+
+<main>
+  <div class="field">
+    <textarea id="editor" placeholder="在這裡輸入文字…（長按此處叫出剪貼簿）"></textarea>
+    <div id="clipBubble">📋 剪貼簿</div>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn primary" id="copyBtn">複製選取／全部</button>
+    <button class="btn" id="openBtn">開啟剪貼簿</button>
+  </div>
+  <div class="hint">提示：先反白要複製的文字再按「複製」；未反白則複製整段。</div>
+</main>
+
+<div id="scrim"></div>
+
+<section id="sheet" aria-label="剪貼簿視窗">
+  <div class="grab"></div>
+  <div class="sheet-head">
+    <h2>剪貼簿</h2>
+    <button class="clear-all" id="clearAll">🗑️ 全部刪除</button>
+  </div>
+  <div class="grid" id="grid"></div>
+</section>
+
+<div id="ctx">
+  <button id="ctxLock">🔒 鎖定</button>
+  <button class="d" id="ctxDel">🗑️ 刪除</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const KEY='clipboard_items_v1';
+const editor=document.getElementById('editor');
+const bubble=document.getElementById('clipBubble');
+const sheet=document.getElementById('sheet');
+const scrim=document.getElementById('scrim');
+const grid=document.getElementById('grid');
+const ctx=document.getElementById('ctx');
+const toastEl=document.getElementById('toast');
+
+let items=load();
+let ctxTarget=null;
+
+function load(){try{return JSON.parse(localStorage.getItem(KEY))||[];}catch{return [];}}
+function save(){localStorage.setItem(KEY,JSON.stringify(items));}
+function uid(){return 'i'+Math.random().toString(36).slice(2)+performance.now().toString(36);}
+
+function toast(msg){
+  toastEl.textContent=msg;toastEl.classList.add('show');
+  clearTimeout(toast._t);toast._t=setTimeout(()=>toastEl.classList.remove('show'),1400);
+}
+
+/* ---------- 複製：寫入系統剪貼簿 + 加入清單 ---------- */
+document.getElementById('copyBtn').addEventListener('click',async()=>{
+  const sel=editor.value.substring(editor.selectionStart,editor.selectionEnd).trim();
+  const text=(sel||editor.value).trim();
+  if(!text){toast('沒有可複製的文字');return;}
+  try{await navigator.clipboard.writeText(text);}catch{/* 忽略：仍存入清單 */}
+  addItem(text);
+  toast('已複製並存入剪貼簿');
+});
+
+function addItem(text){
+  // 去重：若已存在相同文字，移到最前
+  const idx=items.findIndex(i=>i.text===text);
+  if(idx>=0){const [ex]=items.splice(idx,1);items.unshift(ex);}
+  else items.unshift({id:uid(),text,locked:false});
+  save();render();
+}
+
+/* ---------- 剪貼簿視窗開關 ---------- */
+function openSheet(){render();sheet.classList.add('show');scrim.classList.add('show');}
+function closeSheet(){sheet.classList.remove('show');scrim.classList.remove('show');hideCtx();}
+document.getElementById('openBtn').addEventListener('click',openSheet);
+scrim.addEventListener('click',closeSheet);
+
+/* ---------- 長按輸入框 → 顯示「剪貼簿」氣泡 ---------- */
+let pressTimer=null;
+function showBubbleAt(x,y){
+  const r=editor.getBoundingClientRect();
+  bubble.style.left=Math.min(Math.max(x,r.left+40),r.right-40)+'px';
+  bubble.style.top=(y-8)+'px';
+  bubble.classList.add('show');
+  clearTimeout(showBubbleAt._t);
+  showBubbleAt._t=setTimeout(hideBubble,3000);
+}
+function hideBubble(){bubble.classList.remove('show');}
+bubble.addEventListener('click',()=>{hideBubble();openSheet();});
+
+function startPress(x,y){
+  clearTimeout(pressTimer);
+  pressTimer=setTimeout(()=>showBubbleAt(x,y),480);
+}
+function cancelPress(){clearTimeout(pressTimer);}
+
+editor.addEventListener('touchstart',e=>{const t=e.touches[0];startPress(t.clientX,t.clientY);},{passive:true});
+editor.addEventListener('touchend',cancelPress);
+editor.addEventListener('touchmove',cancelPress,{passive:true});
+// 桌機測試：滑鼠長按
+editor.addEventListener('mousedown',e=>startPress(e.clientX,e.clientY));
+editor.addEventListener('mouseup',cancelPress);
+editor.addEventListener('mouseleave',cancelPress);
+// 攔截原生 contextmenu，改用自訂氣泡（右鍵 / 部分裝置長按）
+editor.addEventListener('contextmenu',e=>{e.preventDefault();showBubbleAt(e.clientX||100,e.clientY||100);});
+
+/* ---------- 渲染卡片 ---------- */
+function render(){
+  grid.innerHTML='';
+  if(items.length===0){
+    grid.innerHTML='<div class="empty">目前沒有剪貼項目<br>選取文字後按「複製」即可加入</div>';
+    return;
+  }
+  for(const it of items){
+    const el=document.createElement('div');
+    el.className='item'+(it.locked?' locked':'');
+    el.dataset.id=it.id;
+    el.textContent=it.text;
+    if(it.locked){
+      const b=document.createElement('span');b.className='lock-badge';b.textContent='🔒';
+      el.appendChild(b);
+    }
+    bindItem(el,it);
+    grid.appendChild(el);
+  }
+}
+
+/* ---------- 卡片：點擊貼上 / 長按選單 ---------- */
+function bindItem(el,it){
+  let timer=null,longPressed=false;
+  const start=(x,y)=>{longPressed=false;timer=setTimeout(()=>{longPressed=true;showCtx(it,x,y);},450);};
+  const end=()=>clearTimeout(timer);
+
+  el.addEventListener('touchstart',e=>{const t=e.touches[0];start(t.clientX,t.clientY);},{passive:true});
+  el.addEventListener('touchend',end);
+  el.addEventListener('touchmove',end,{passive:true});
+  el.addEventListener('mousedown',e=>start(e.clientX,e.clientY));
+  el.addEventListener('mouseup',end);
+  el.addEventListener('mouseleave',end);
+  el.addEventListener('contextmenu',e=>{e.preventDefault();showCtx(it,e.clientX,e.clientY);});
+
+  el.addEventListener('click',()=>{
+    if(longPressed){longPressed=false;return;}
+    pasteItem(it);
+  });
+}
+
+function pasteItem(it){
+  const s=editor.selectionStart??editor.value.length;
+  const e=editor.selectionEnd??editor.value.length;
+  editor.value=editor.value.slice(0,s)+it.text+editor.value.slice(e);
+  const pos=s+it.text.length;
+  editor.focus();editor.setSelectionRange(pos,pos);
+  closeSheet();
+  toast('已貼上');
+}
+
+/* ---------- 卡片長按選單 ---------- */
+function showCtx(it,x,y){
+  ctxTarget=it;
+  document.getElementById('ctxLock').textContent=it.locked?'🔓 解除鎖定':'🔒 鎖定';
+  ctx.style.left=Math.min(x,window.innerWidth-150)+'px';
+  ctx.style.top=Math.min(y,window.innerHeight-120)+'px';
+  ctx.classList.add('show');
+}
+function hideCtx(){ctx.classList.remove('show');ctxTarget=null;}
+document.getElementById('ctxLock').addEventListener('click',()=>{
+  if(ctxTarget){ctxTarget.locked=!ctxTarget.locked;save();render();toast(ctxTarget.locked?'已鎖定':'已解鎖');}
+  hideCtx();
+});
+document.getElementById('ctxDel').addEventListener('click',()=>{
+  if(ctxTarget){items=items.filter(i=>i.id!==ctxTarget.id);save();render();toast('已刪除');}
+  hideCtx();
+});
+document.addEventListener('click',e=>{
+  if(ctx.classList.contains('show')&&!ctx.contains(e.target)&&!e.target.closest('.item'))hideCtx();
+});
+
+/* ---------- 全部刪除（保留鎖定） ---------- */
+document.getElementById('clearAll').addEventListener('click',()=>{
+  const kept=items.filter(i=>i.locked);
+  const removed=items.length-kept.length;
+  if(removed===0){toast('沒有可刪除的項目（皆已鎖定）');return;}
+  items=kept;save();render();toast(`已刪除 ${removed} 項（保留 ${kept.length} 項鎖定）`);
+});
+
+render();
+
+/* Service Worker */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
