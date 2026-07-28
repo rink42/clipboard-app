@@ -24,7 +24,8 @@
   header h1{margin:0;font-size:20px;font-weight:700;}
   header p{margin:4px 0 0;font-size:12px;color:var(--sub);line-height:1.5;}
 
-  main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px 18px;overflow:auto;}
+  main{flex:1;display:flex;flex-direction:column;gap:12px;padding:14px 18px;overflow:auto;
+    padding-bottom:calc(var(--sheet-h) + 14px);}
 
   .field{position:relative;}
   #editor{
@@ -42,12 +43,7 @@
   .btn.primary{background:var(--accent);color:#082f49;}
   .hint{font-size:12px;color:var(--sub);}
 
-  /* 遮罩 */
-  #scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);opacity:0;pointer-events:none;
-    transition:opacity .25s;z-index:40;}
-  #scrim.show{opacity:1;pointer-events:auto;}
-
-  /* 剪貼簿視窗（由下往上滑出） */
+  /* 剪貼簿視窗（由下往上滑出，常駐面板，不遮擋上方輸入區） */
   #sheet{
     position:fixed;left:0;right:0;bottom:0;z-index:50;height:var(--sheet-h);
     background:var(--surface);border-radius:20px 20px 0 0;box-shadow:0 -10px 40px rgba(0,0,0,.5);
@@ -111,8 +107,6 @@
   <div class="hint">提示：先反白要複製的文字再按「複製」；未反白則複製整段。</div>
 </main>
 
-<div id="scrim"></div>
-
 <section id="sheet" aria-label="剪貼簿視窗">
   <div class="grab"></div>
   <div class="sheet-head">
@@ -133,7 +127,6 @@
 const KEY='clipboard_items_v1';
 const editor=document.getElementById('editor');
 const sheet=document.getElementById('sheet');
-const scrim=document.getElementById('scrim');
 const grid=document.getElementById('grid');
 const ctx=document.getElementById('ctx');
 const toastEl=document.getElementById('toast');
@@ -169,10 +162,8 @@ function addItem(text){
 }
 
 /* ---------- 剪貼簿視窗開關 ---------- */
-function openSheet(){render();sheet.classList.add('show');scrim.classList.add('show');}
-function closeSheet(){sheet.classList.remove('show');scrim.classList.remove('show');hideCtx();}
+function openSheet(){render();sheet.classList.add('show');}
 document.getElementById('openBtn').addEventListener('click',openSheet);
-scrim.addEventListener('click',closeSheet);
 
 /* ---------- 渲染卡片 ---------- */
 function render(){
@@ -221,7 +212,6 @@ function pasteItem(it){
   editor.value=editor.value.slice(0,s)+it.text+editor.value.slice(e);
   const pos=s+it.text.length;
   editor.focus();editor.setSelectionRange(pos,pos);
-  closeSheet();
   toast('已貼上');
 }
 

@@ -1,5 +1,5 @@
 // Service Worker — 每次改版請把 CACHE_VER 升號
-const CACHE_VER = 'clipboard-v3';
+const CACHE_VER = 'clipboard-v4';
 const ASSETS = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', e => {
